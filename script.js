@@ -273,18 +273,7 @@ class ConverterApp {
             });
 
             if (!response.ok) {
-                const contentType = response.headers.get('content-type') || '';
-                let message = `Conversion failed (${response.status})`;
-
-                if (contentType.includes('application/json')) {
-                    const error = await response.json();
-                    message = error.error || error.message || message;
-                } else {
-                    const text = await response.text();
-                    message = text ? text.slice(0, 300) : message;
-                }
-
-                throw new Error(message);
+                throw new Error(await this.getErrorMessage(response));
             }
 
             // Get the filename from Content-Disposition header
@@ -300,6 +289,25 @@ class ConverterApp {
             return { blob, filename };
         } catch (error) {
             throw error;
+        }
+    }
+
+    /**
+     * Read an API error response without assuming it is valid JSON.
+     */
+    async getErrorMessage(response) {
+        const fallback = `Conversion failed (${response.status})`;
+
+        try {
+            const error = await response.clone().json();
+            return error.error || error.message || fallback;
+        } catch (_) {
+            try {
+                const text = await response.text();
+                return text ? text.slice(0, 300) : fallback;
+            } catch (_) {
+                return fallback;
+            }
         }
     }
 
@@ -405,17 +413,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.converterApp = new ConverterApp();
 });
 
-/**
- * Service Worker Registration (for offline capability - future enhancement)
- */
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js')
-        .then(registration => {
-            console.log('Service Worker registered:', registration);
-        })
-        .catch(error => {
-            console.log('Service Worker registration failed:', error);
-        });
+    navigator.serviceWorker.getRegistrations()
+        .then(registrations => registrations.forEach(registration => registration.unregister()))
+        .catch(error => console.log('Service Worker cleanup failed:', error));
 }
 
 /**
