@@ -273,8 +273,18 @@ class ConverterApp {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Conversion failed');
+                const contentType = response.headers.get('content-type') || '';
+                let message = `Conversion failed (${response.status})`;
+
+                if (contentType.includes('application/json')) {
+                    const error = await response.json();
+                    message = error.error || error.message || message;
+                } else {
+                    const text = await response.text();
+                    message = text ? text.slice(0, 300) : message;
+                }
+
+                throw new Error(message);
             }
 
             // Get the filename from Content-Disposition header
